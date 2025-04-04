@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction Results</title>
+     <style>
+        body { font-family: sans-serif; padding: 20px; }
+        h1, h2 { margin-bottom: 15px; }
+        .metrics p { margin: 5px 0; }
+        .download-links a {
+            display: inline-block;
+            margin: 15px 10px 15px 0;
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .download-links a:hover { background-color: #0056b3; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px;}
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Results for {{ address }}</h1>
+    <p>Period: {{ start_date_str }} to {{ end_date_str }}</p>
+
+    <h2>Metrics</h2>
+    <div class="metrics">
+        <p><strong>Total Transactions Processed:</strong> {{ metrics.trades }}</p>
+        <p><strong>Total Volume (Sent + Received):</strong> {{ "%.6f"|format(metrics.volume_xtz) }} XTZ</p>
+        <p><strong>Total Tezos Earned (Incoming):</strong> {{ "%.6f"|format(metrics.earned_xtz) }} XTZ</p>
+    </div>
+
+    {% if has_data %}
+    <h2>Downloads</h2>
+    <div class="download-links">
+        <a href="{{ url_for('download_csv', type='transactions', address=address, start=start_date_iso, end=end_date_iso) }}">
+            Download All Transactions (CSV)
+        </a>
+        <a href="{{ url_for('download_csv', type='daily_summary', address=address, start=start_date_iso, end=end_date_iso) }}">
+            Download Daily Summary (CSV)
+        </a>
+    </div>
+
+    <h2>Daily Summary Preview</h2>
+    {% if daily_summary_html %}
+        {{ daily_summary_html | safe }}
+    {% else %}
+        <p>No daily summary data to display.</p>
+    {% endif %}
+
+    {% else %}
+    <p>No transaction data found for the specified period.</p>
+    {% endif %}
+
+    <p><a href="/">Go back</a></p>
+
+</body>
+</html>
