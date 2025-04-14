@@ -5,29 +5,317 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tezos Transaction Reporter</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; }
-        label { display: block; margin-top: 10px; }
-        input[type="text"], input[type="datetime-local"] { width: 300px; padding: 8px; margin-top: 5px; }
-        button { padding: 10px 15px; margin-top: 20px; cursor: pointer; }
-        .error { color: red; margin-top: 10px; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            background-color: #f8f9fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        h3 {
+            color: #2c3e50;
+            margin-top: 20px;
+            margin-bottom: 15px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        label {
+            display: inline-block;
+            margin-top: 10px;
+            font-weight: 500;
+        }
+        input[type="text"], input[type="datetime-local"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        input[type="datetime-local"] {
+            margin-bottom: 15px;
+        }
+        button {
+            padding: 12px 20px;
+            margin-top: 20px;
+            cursor: pointer;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #fadbd8;
+            border-radius: 4px;
+        }
+        
+        /* Form group styling */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #2c3e50;
+        }
+        
+        /* Radio button styling */
+        .radio-container {
+            margin-bottom: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .custom-address {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #eee;
+        }
+        .address-options {
+            padding: 0;
+        }
+        .address-option {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: flex-start;
+        }
+        .address-option:last-child {
+            border-bottom: none;
+        }
+        .address-option:hover {
+            background-color: #f1f8fe;
+        }
+        .address-option.selected {
+            background-color: #e3f2fd;
+        }
+        .address-option input[type="radio"] {
+            margin-top: 3px;
+            margin-right: 10px;
+        }
+        .address-option label {
+            margin: 0;
+            cursor: pointer;
+            flex: 1;
+        }
+        .address-name {
+            font-weight: 600;
+            color: #2c3e50;
+            display: block;
+            margin-bottom: 3px;
+        }
+        .address-description {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+        .address-value {
+            display: block;
+            font-family: monospace;
+            background-color: #f0f0f0;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #e67e22;
+            word-break: break-all;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
-    <h1>Tezos Account Transaction Reporter</h1>
-    {% if error %}
-        <p class="error">Error: {{ error }}</p>
-    {% endif %}
-    <form action="/results" method="post">
-        <label for="tezos_address">Tezos Address:</label>
-        <input type="text" id="tezos_address" name="tezos_address" value="tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD" required>
+    <div class="container">
+        <h1>Tezos Account Transaction Reporter</h1>
+        {% if error %}
+            <p class="error">Error: {{ error }}</p>
+        {% endif %}
+        <form action="/results" method="post">
+            <h3>Select Contract Address:</h3>
+            <div class="radio-container">
+                <div class="custom-address">
+                    <input type="radio" id="address_custom" name="address_type" value="custom" checked>
+                    <label for="address_custom">Enter custom address:</label>
+                    <input type="text" id="tezos_address" name="tezos_address" value="tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD">
+                </div>
+                
+                <div class="address-options">
+                    <div class="address-option" id="option_bank">
+                        <input type="radio" id="address_bank" name="address_type" value="bank">
+                        <label for="address_bank">
+                            <span class="address-name">Bank Address</span>
+                            <span class="address-description">Manages money storage and sending for offers, only on Marketplace contract</span>
+                            <span class="address-value">KT1NkX98gNeFb3QVcpMs5r7pKUut1twg9DQd</span>
+                        </label>
+                    </div>
+                    
+                    <div class="address-option" id="option_factory">
+                        <input type="radio" id="address_factory" name="address_type" value="factory">
+                        <label for="address_factory">
+                            <span class="address-name">Contract Factory</span>
+                            <span class="address-description">People call and pay this contract to deploy their contracts for them</span>
+                            <span class="address-value">KT1S6WCZrJdXFgT1zbVN9MmiPF1C9UMjeFzK</span>
+                        </label>
+                    </div>
+                    
+                    <div class="address-option" id="option_marketplace">
+                        <input type="radio" id="address_marketplace" name="address_type" value="marketplace">
+                        <label for="address_marketplace">
+                            <span class="address-name">Marketplace</span>
+                            <span class="address-description">Listing/auction for 1of1s and offers for both 1of1s and editions</span>
+                            <span class="address-value">KT1J8ydKTxBL7ioUqSosrYNsZNq6XcoXkP9C</span>
+                        </label>
+                    </div>
+                    
+                    <div class="address-option" id="option_auction">
+                        <input type="radio" id="address_auction" name="address_type" value="auction">
+                        <label for="address_auction">
+                            <span class="address-name">Auction Marketplace</span>
+                            <span class="address-description">Used for auctioning for both 1of1s and editions</span>
+                            <span class="address-value">KT1CT8AjgBhzzUP1CwhW7EvNcsYStipGt5B4</span>
+                        </label>
+                    </div>
+                    
+                    <div class="address-option" id="option_editions">
+                        <input type="radio" id="address_editions" name="address_type" value="editions">
+                        <label for="address_editions">
+                            <span class="address-name">Editions Marketplace</span>
+                            <span class="address-description">Listing of editions</span>
+                            <span class="address-value">KT19Mb31GqSumA3YhfdCkv1p1uAaFNR7w7gT</span>
+                        </label>
+                    </div>
+                    
+                    <div class="address-option" id="option_mp_owner">
+                        <input type="radio" id="address_mp_owner" name="address_type" value="mp_owner">
+                        <label for="address_mp_owner">
+                            <span class="address-name">Marketplace Contract's Owner / MP Fees</span>
+                            <span class="address-value">tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD</span>
+                        </label>
+                    </div>
+                    
+                    <div class="address-option" id="option_factory_owner">
+                        <input type="radio" id="address_factory_owner" name="address_type" value="factory_owner">
+                        <label for="address_factory_owner">
+                            <span class="address-name">Factory owner/agent</span>
+                            <span class="address-value">tz1L6kFTx9N9TKGzUMCLJ7ZBgqFs6biRHQEd</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
 
-        <label for="start_datetime">Start Date and Time:</label>
-        <input type="datetime-local" id="start_datetime" name="start_datetime" required>
+            <div class="form-group">
+                <label for="start_datetime">Start Date and Time:</label>
+                <input type="datetime-local" id="start_datetime" name="start_datetime" required>
+            </div>
 
-        <label for="end_datetime">End Date and Time:</label>
-        <input type="datetime-local" id="end_datetime" name="end_datetime" required>
+            <div class="form-group">
+                <label for="end_datetime">End Date and Time:</label>
+                <input type="datetime-local" id="end_datetime" name="end_datetime" required>
+            </div>
 
-        <button type="submit">Fetch Data</button>
+            <button type="submit">Fetch Data</button>
+        </div>
     </form>
+    
+    <script>
+        // JavaScript to handle radio button selection
+        document.addEventListener('DOMContentLoaded', function() {
+            // Define the address mapping
+            const addressMap = {
+                'bank': 'KT1NkX98gNeFb3QVcpMs5r7pKUut1twg9DQd',
+                'factory': 'KT1S6WCZrJdXFgT1zbVN9MmiPF1C9UMjeFzK',
+                'marketplace': 'KT1J8ydKTxBL7ioUqSosrYNsZNq6XcoXkP9C',
+                'auction': 'KT1CT8AjgBhzzUP1CwhW7EvNcsYStipGt5B4',
+                'editions': 'KT19Mb31GqSumA3YhfdCkv1p1uAaFNR7w7gT',
+                'mp_owner': 'tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD',
+                'factory_owner': 'tz1L6kFTx9N9TKGzUMCLJ7ZBgqFs6biRHQEd'
+            };
+            
+            // Get all radio buttons, the text input, and option containers
+            const radioButtons = document.querySelectorAll('input[name="address_type"]');
+            const addressInput = document.getElementById('tezos_address');
+            const addressOptions = document.querySelectorAll('.address-option');
+            
+            // Function to update the selected class on options
+            function updateSelectedClass(selectedValue) {
+                // Remove selected class from all options
+                addressOptions.forEach(option => {
+                    option.classList.remove('selected');
+                });
+                
+                // Add selected class to the chosen option
+                if (selectedValue !== 'custom') {
+                    const selectedOption = document.getElementById(`option_${selectedValue}`);
+                    if (selectedOption) {
+                        selectedOption.classList.add('selected');
+                    }
+                }
+            }
+            
+            // Function to handle radio button change
+            function handleRadioChange(e) {
+                const selectedValue = e.target.value;
+                
+                // Update visual selection
+                updateSelectedClass(selectedValue);
+                
+                if (selectedValue === 'custom') {
+                    // Enable the text input for custom address
+                    addressInput.disabled = false;
+                    addressInput.required = true;
+                    addressInput.focus(); // Focus the input for better UX
+                } else {
+                    // Disable the text input and set its value to the selected predefined address
+                    addressInput.disabled = true;
+                    addressInput.required = false;
+                    addressInput.value = addressMap[selectedValue];
+                }
+            }
+            
+            // Add event listeners to all radio buttons
+            radioButtons.forEach(radio => {
+                radio.addEventListener('change', handleRadioChange);
+            });
+            
+            // Add click event to the entire option div for better UX
+            addressOptions.forEach(option => {
+                option.addEventListener('click', function(e) {
+                    // Find the radio button inside this option
+                    const radio = this.querySelector('input[type="radio"]');
+                    if (radio && !e.target.matches('input[type="radio"]')) {
+                        radio.checked = true;
+                        radio.dispatchEvent(new Event('change'));
+                    }
+                });
+            });
+            
+            // Initialize the state based on the default selected radio
+            const initialSelected = document.querySelector('input[name="address_type"]:checked');
+            if (initialSelected) {
+                handleRadioChange({ target: initialSelected });
+            }
+        });
+    </script>
 </body>
 </html>

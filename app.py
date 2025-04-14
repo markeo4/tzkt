@@ -8,8 +8,10 @@ from flask import Flask, request, render_template, send_file, url_for, redirect
 
 # --- Configuration ---
 TZKT_API_URL = "https://api.tzkt.io/v1"
-REQUESTS_PER_SECOND = 10 # TzKT free tier limit
+REQUESTS_PER_SECOND = 5 # Reduced to be more conservative with rate limits
 DELAY_BETWEEN_REQUESTS = 1.0 / REQUESTS_PER_SECOND
+MAX_RETRIES = 3 # Maximum number of retries for failed requests
+RETRY_DELAY = 5 # Seconds to wait between retries
 
 # --- Flask App Setup ---
 app = Flask(__name__)
@@ -19,70 +21,123 @@ app.secret_key = 'your_very_secret_key_here'
 # --- Helper Functions (Adapted from previous script) ---
 
 def fetch_transactions(address, start_date_iso, end_date_iso):
-    """Fetches transaction operations from TzKT API."""
+    """Fetches transaction operations from TzKT API with robust error handling and retries."""
     all_transactions = []
     last_id = None
     limit = 1000
+    page_count = 0
+    total_retries = 0
 
     print(f"Fetching transactions for {address} from {start_date_iso} to {end_date_iso}...") # Log for server console
 
     while True:
-        try:
-            url = f"{TZKT_API_URL}/accounts/{address}/operations"
-            params = {
-                "type": "transaction",
-                "timestamp.ge": start_date_iso,
-                "timestamp.lt": end_date_iso,
-                "status": "applied",
-                "limit": limit,
-                "sort.desc": "id",
-            }
-            if last_id:
-                params["lastId"] = last_id
+        retry_count = 0
+        success = False
+        
+        while not success and retry_count < MAX_RETRIES:
+            try:
+                url = f"{TZKT_API_URL}/accounts/{address}/operations"
+                params = {
+                    "type": "transaction",
+                    "timestamp.ge": start_date_iso,
+                    "timestamp.lt": end_date_iso,
+                    "status": "applied",
+                    "limit": limit,
+                    "sort.desc": "id",
+                }
+                if last_id:
+                    params["lastId"] = last_id
 
-            response = requests.get(url, params=params)
-            # Don't raise for status here, handle potential errors below
-            if response.status_code == 429: # Rate limited
-                 print("Rate limit hit. Waiting 5 seconds...")
-                 time.sleep(5)
-                 continue # Retry the same request
-            elif response.status_code >= 400:
-                 print(f"API Error: {response.status_code} - {response.text}")
-                 # Return what we have, or an empty list, or raise an exception
-                 # For this web app, let's return what we have and potentially show partial results
-                 break # Exit loop on other errors for now
-            # response.raise_for_status() # Optional: Raise for other errors if preferred
+                print(f"Requesting page {page_count + 1}...")
+                response = requests.get(url, params=params)
+                
+                # Handle rate limiting and other errors
+                if response.status_code == 429: # Rate limited
+                    retry_count += 1
+                    total_retries += 1
+                    wait_time = RETRY_DELAY * retry_count  # Exponential backoff
+                    print(f"Rate limit hit. Waiting {wait_time} seconds... (Retry {retry_count}/{MAX_RETRIES})")
+                    time.sleep(wait_time)
+                    continue # Retry the same request
+                elif response.status_code >= 400:
+                    print(f"API Error: {response.status_code} - {response.text}")
+                    if retry_count < MAX_RETRIES - 1:
+                        retry_count += 1
+                        total_retries += 1
+                        wait_time = RETRY_DELAY * retry_count
+                        print(f"Retrying in {wait_time} seconds... (Retry {retry_count}/{MAX_RETRIES})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print(f"Max retries reached for this request. Moving on with partial data.")
+                        break # Exit retry loop but continue with what we have
+                
+                # Parse the response
+                transactions = response.json()
+                success = True
+                
+                if not transactions:
+                    print("No more transactions found.")
+                    break
 
-            transactions = response.json()
+                # Process the transactions
+                count_in_batch = 0
+                for tx in transactions:
+                    tx_timestamp = tx.get('timestamp')
+                    # Double check timestamp range (should be handled by API)
+                    if tx_timestamp >= start_date_iso and tx_timestamp < end_date_iso:
+                        all_transactions.append(tx)
+                        count_in_batch += 1
 
-            if not transactions:
-                break
+                page_count += 1
+                print(f"Fetched {count_in_batch} transactions in batch {page_count} (Total: {len(all_transactions)})")
 
-            count_in_batch = 0
-            for tx in transactions:
-                tx_timestamp = tx.get('timestamp')
-                # Double check timestamp range (should be handled by API)
-                if tx_timestamp >= start_date_iso and tx_timestamp < end_date_iso:
-                    all_transactions.append(tx)
-                    count_in_batch += 1
-
-            print(f"Fetched {count_in_batch} transactions in batch (Total: {len(all_transactions)})")
-
-            last_id = transactions[-1]['id']
-            time.sleep(DELAY_BETWEEN_REQUESTS)
-
-        except requests.exceptions.RequestException as e:
-            print(f"Network error fetching data from TzKT: {e}")
-            # Decide how to handle: break, retry, raise...
-            break # Exit loop on network errors for now
-        except json.JSONDecodeError:
-            print("Error decoding JSON response from TzKT.")
+                # Update last_id for pagination
+                if transactions:
+                    last_id = transactions[-1]['id']
+                
+                # Respect rate limits
+                time.sleep(DELAY_BETWEEN_REQUESTS)
+                
+            except requests.exceptions.RequestException as e:
+                print(f"Network error fetching data from TzKT: {e}")
+                if retry_count < MAX_RETRIES - 1:
+                    retry_count += 1
+                    total_retries += 1
+                    wait_time = RETRY_DELAY * retry_count
+                    print(f"Retrying in {wait_time} seconds... (Retry {retry_count}/{MAX_RETRIES})")
+                    time.sleep(wait_time)
+                else:
+                    print("Max retries reached for network error. Moving on with partial data.")
+                    break
+            except json.JSONDecodeError:
+                print("Error decoding JSON response from TzKT.")
+                if retry_count < MAX_RETRIES - 1:
+                    retry_count += 1
+                    total_retries += 1
+                    wait_time = RETRY_DELAY * retry_count
+                    print(f"Retrying in {wait_time} seconds... (Retry {retry_count}/{MAX_RETRIES})")
+                    time.sleep(wait_time)
+                else:
+                    print("Max retries reached for JSON decode error. Moving on with partial data.")
+                    break
+            except Exception as e:
+                print(f"An unexpected error occurred during fetch: {e}")
+                if retry_count < MAX_RETRIES - 1:
+                    retry_count += 1
+                    total_retries += 1
+                    wait_time = RETRY_DELAY * retry_count
+                    print(f"Retrying in {wait_time} seconds... (Retry {retry_count}/{MAX_RETRIES})")
+                    time.sleep(wait_time)
+                else:
+                    print("Max retries reached for unexpected error. Moving on with partial data.")
+                    break
+        
+        # If we didn't get any transactions in this batch or reached max retries without success, exit the main loop
+        if not success or not transactions:
             break
-        except Exception as e:
-            print(f"An unexpected error occurred during fetch: {e}")
-            break # Prevent potential infinite loops on unexpected errors
 
-    print(f"Finished fetching. Total transactions: {len(all_transactions)}")
+    print(f"Finished fetching. Total transactions: {len(all_transactions)}, Pages: {page_count}, Total retries: {total_retries}")
     return all_transactions
 
 
@@ -150,7 +205,7 @@ def process_data(transactions, target_address):
     return df, metrics
 
 def calculate_daily_summary(df):
-    """Calculates daily summaries."""
+    """Calculates daily summaries with totals."""
     if df.empty or 'Timestamp' not in df.columns:
         return pd.DataFrame()
 
@@ -184,6 +239,17 @@ def calculate_daily_summary(df):
     daily_summary['XTZ_Sent'] = daily_summary['XTZ_Sent'].round(6)
     daily_summary['Net XTZ Change'] = daily_summary['Net XTZ Change'].round(6)
 
+    # Calculate totals
+    totals = pd.DataFrame({
+        'Date': ['TOTAL'],
+        'Transactions': [daily_summary['Transactions'].sum()],
+        'XTZ_Received': [daily_summary['XTZ_Received'].sum().round(6)],
+        'XTZ_Sent': [daily_summary['XTZ_Sent'].sum().round(6)],
+        'Net XTZ Change': [(daily_summary['XTZ_Received'].sum() - daily_summary['XTZ_Sent'].sum()).round(6)]
+    })
+    
+    # Append totals row to the daily summary
+    daily_summary = pd.concat([daily_summary, totals], ignore_index=True)
 
     return daily_summary
 
@@ -198,12 +264,31 @@ def index():
 def handle_results():
     """Process form data, fetch data, and display results."""
     try:
-        address = request.form['tezos_address']
+        # Get address based on selection type
+        address_type = request.form.get('address_type', 'custom')
+        
+        # Define the address mapping
+        address_map = {
+            'bank': 'KT1NkX98gNeFb3QVcpMs5r7pKUut1twg9DQd',
+            'factory': 'KT1S6WCZrJdXFgT1zbVN9MmiPF1C9UMjeFzK',
+            'marketplace': 'KT1J8ydKTxBL7ioUqSosrYNsZNq6XcoXkP9C',
+            'auction': 'KT1CT8AjgBhzzUP1CwhW7EvNcsYStipGt5B4',
+            'editions': 'KT19Mb31GqSumA3YhfdCkv1p1uAaFNR7w7gT',
+            'mp_owner': 'tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD',
+            'factory_owner': 'tz1L6kFTx9N9TKGzUMCLJ7ZBgqFs6biRHQEd'
+        }
+        
+        # Use the selected predefined address or the custom one
+        if address_type == 'custom':
+            address = request.form['tezos_address']
+        else:
+            address = address_map.get(address_type)
+            
         start_dt_str = request.form['start_datetime']
         end_dt_str = request.form['end_datetime']
 
         # Validate inputs
-        if not address or not address.startswith('tz'):
+        if not address or not (address.startswith('tz') or address.startswith('KT')):
             return render_template('index.html', error="Invalid Tezos address.")
 
         # Convert HTML datetime-local format to ISO 8601 Z format for API
@@ -227,7 +312,29 @@ def handle_results():
         daily_summary_html = None
         has_data = not transactions_df.empty
         if not daily_summary_df.empty:
-             daily_summary_html = daily_summary_df.head(50).to_html(index=False, classes='table table-striped') # Show first 50 rows
+            # Format the daily summary table with styled total row
+            # First, get all rows except the last one (total row)
+            if len(daily_summary_df) > 1:
+                regular_rows = daily_summary_df.iloc[:-1]
+                total_row = daily_summary_df.iloc[-1:]
+                
+                # Generate HTML for regular rows
+                regular_html = regular_rows.head(50).to_html(index=False, classes='table table-striped')
+                
+                # Generate HTML for total row with special class
+                total_html = total_row.to_html(index=False, classes='table')
+                
+                # Replace the <tr> tag in total_html with <tr class="total-row">
+                total_html = total_html.replace('<tr>', '<tr class="total-row">', 1)
+                
+                # Remove the header from the total HTML
+                total_html = total_html.split('</thead>')[1]
+                
+                # Combine the regular HTML with the total HTML
+                daily_summary_html = regular_html.replace('</table>', '') + total_html.replace('<table border="1" class="table">', '')
+            else:
+                # If there's only one row (which would be the total), just use standard styling
+                daily_summary_html = daily_summary_df.to_html(index=False, classes='table table-striped')
 
         return render_template(
             'results.html',
@@ -273,8 +380,12 @@ def download_csv(type):
             daily_summary_df = calculate_daily_summary(transactions_df)
             if daily_summary_df.empty:
                  return "No daily summary data found to download.", 404
+                 
+            # The totals row is already included in the daily_summary_df from the calculate_daily_summary function
             df_to_download = daily_summary_df
-            filename = f"{address}_daily_summary_{start_date_iso[:10]}_to_{end_date_iso[:10]}.csv"
+            
+            # Add a note in the filename that totals are included
+            filename = f"{address}_daily_summary_with_totals_{start_date_iso[:10]}_to_{end_date_iso[:10]}.csv"
 
         else:
             return "Invalid download type.", 400
