@@ -35,8 +35,13 @@
     <h2>Metrics</h2>
     <div class="metrics">
         <p><strong>Total Transactions Processed:</strong> {{ metrics.trades }}</p>
-        <p><strong>Total Volume (Sent + Received):</strong> {{ "%.6f"|format(metrics.volume_xtz) }} XTZ</p>
-        <p><strong>Total Tezos Earned (Incoming):</strong> {{ "%.6f"|format(metrics.earned_xtz) }} XTZ</p>
+        {% if is_mp_fees %}
+            <p><strong>Total Skurpy Cut (3%):</strong> {{ "%.6f"|format(metrics.earned_xtz) }} XTZ</p>
+            <p><strong>Estimated Total Volume:</strong> {{ "%.6f"|format(metrics.earned_xtz / 0.03) }} XTZ</p>
+        {% else %}
+            <p><strong>Total Volume (Sent + Received):</strong> {{ "%.6f"|format(metrics.volume_xtz) }} XTZ</p>
+            <p><strong>Total Tezos Earned (Incoming):</strong> {{ "%.6f"|format(metrics.earned_xtz) }} XTZ</p>
+        {% endif %}
     </div>
 
     {% if has_data %}
@@ -49,6 +54,13 @@
             Download Daily Summary (CSV)
         </a>
     </div>
+
+    {% if is_mp_fees and graph_data %}
+    <h2>Skurpy Cut Over Time</h2>
+    <div class="graph-container" style="margin: 20px 0; text-align: center;">
+        <img src="data:image/png;base64,{{ graph_data }}" alt="Skurpy Cut Over Time" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+    </div>
+    {% endif %}
 
     <h2>Daily Summary Preview</h2>
     {% if daily_summary_html %}

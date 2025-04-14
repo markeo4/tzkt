@@ -4,6 +4,10 @@ import datetime
 import json
 import pandas as pd
 import io # For creating CSV in memory
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
+import matplotlib.pyplot as plt
+import base64
 from flask import Flask, request, render_template, send_file, url_for, redirect
 
 # --- Configuration ---
@@ -204,8 +208,8 @@ def process_data(transactions, target_address):
     }
     return df, metrics
 
-def calculate_daily_summary(df):
-    """Calculates daily summaries with totals."""
+def calculate_daily_summary(df, address=None):
+    """Calculates daily summaries with totals, with special handling for MP Fees address."""
     if df.empty or 'Timestamp' not in df.columns:
         return pd.DataFrame()
 
@@ -227,26 +231,51 @@ def calculate_daily_summary(df):
     def sum_outgoing(x):
          return x[df_copy.loc[x.index, 'Direction'] == 'OUT'].sum()
 
-    daily_summary = df_copy.groupby('Date').agg(
-        Transactions=('Hash', 'count'),
-        XTZ_Received=('Amount (XTZ)', sum_incoming),
-        XTZ_Sent=('Amount (XTZ)', sum_outgoing),
-    ).reset_index()
+    # Check if this is the MP Fees address (Marketplace Contract's Owner)
+    is_mp_fees = address == 'tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD'
+    
+    if is_mp_fees:
+        # Special handling for MP Fees address
+        daily_summary = df_copy.groupby('Date').agg(
+            Transactions=('Hash', 'count'),
+            Skurpy_Cut=('Amount (XTZ)', sum_incoming),
+        ).reset_index()
+        
+        # Calculate Total Volume (Skurpy Cut is 3% of total)
+        daily_summary['Total_Volume'] = (daily_summary['Skurpy_Cut'] / 0.03).round(6)
+        
+        # Format columns for better display
+        daily_summary['Skurpy_Cut'] = daily_summary['Skurpy_Cut'].round(6)
+        
+        # Calculate totals
+        totals = pd.DataFrame({
+            'Date': ['TOTAL'],
+            'Transactions': [daily_summary['Transactions'].sum()],
+            'Skurpy_Cut': [daily_summary['Skurpy_Cut'].sum().round(6)],
+            'Total_Volume': [daily_summary['Total_Volume'].sum().round(6)]
+        })
+    else:
+        # Standard handling for other addresses
+        daily_summary = df_copy.groupby('Date').agg(
+            Transactions=('Hash', 'count'),
+            XTZ_Received=('Amount (XTZ)', sum_incoming),
+            XTZ_Sent=('Amount (XTZ)', sum_outgoing),
+        ).reset_index()
 
-    daily_summary['Net XTZ Change'] = daily_summary['XTZ_Received'] - daily_summary['XTZ_Sent']
-    # Format columns for better display if needed
-    daily_summary['XTZ_Received'] = daily_summary['XTZ_Received'].round(6)
-    daily_summary['XTZ_Sent'] = daily_summary['XTZ_Sent'].round(6)
-    daily_summary['Net XTZ Change'] = daily_summary['Net XTZ Change'].round(6)
+        daily_summary['Net XTZ Change'] = daily_summary['XTZ_Received'] - daily_summary['XTZ_Sent']
+        # Format columns for better display if needed
+        daily_summary['XTZ_Received'] = daily_summary['XTZ_Received'].round(6)
+        daily_summary['XTZ_Sent'] = daily_summary['XTZ_Sent'].round(6)
+        daily_summary['Net XTZ Change'] = daily_summary['Net XTZ Change'].round(6)
 
-    # Calculate totals
-    totals = pd.DataFrame({
-        'Date': ['TOTAL'],
-        'Transactions': [daily_summary['Transactions'].sum()],
-        'XTZ_Received': [daily_summary['XTZ_Received'].sum().round(6)],
-        'XTZ_Sent': [daily_summary['XTZ_Sent'].sum().round(6)],
-        'Net XTZ Change': [(daily_summary['XTZ_Received'].sum() - daily_summary['XTZ_Sent'].sum()).round(6)]
-    })
+        # Calculate totals
+        totals = pd.DataFrame({
+            'Date': ['TOTAL'],
+            'Transactions': [daily_summary['Transactions'].sum()],
+            'XTZ_Received': [daily_summary['XTZ_Received'].sum().round(6)],
+            'XTZ_Sent': [daily_summary['XTZ_Sent'].sum().round(6)],
+            'Net XTZ Change': [(daily_summary['XTZ_Received'].sum() - daily_summary['XTZ_Sent'].sum()).round(6)]
+        })
     
     # Append totals row to the daily summary
     daily_summary = pd.concat([daily_summary, totals], ignore_index=True)
@@ -306,8 +335,55 @@ def handle_results():
         # Fetch and Process Data
         raw_transactions = fetch_transactions(address, start_date_iso, end_date_iso)
         transactions_df, metrics = process_data(raw_transactions, address)
-        daily_summary_df = calculate_daily_summary(transactions_df)
+        daily_summary_df = calculate_daily_summary(transactions_df, address)
 
+        # Check if this is the MP Fees address
+        is_mp_fees = address == 'tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD'
+        
+        # Generate line graph for Skurpy Cut if this is the MP Fees address
+        graph_data = None
+        if is_mp_fees and not daily_summary_df.empty and len(daily_summary_df) > 1:
+            # Create a line graph of Skurpy Cut over time
+            plt.figure(figsize=(10, 5))
+            
+            # Get all rows except the last one (total row)
+            plot_data = daily_summary_df.iloc[:-1]
+            
+            # Convert Date to datetime for proper plotting
+            plot_data['Date'] = pd.to_datetime(plot_data['Date'])
+            
+            # Sort by date
+            plot_data = plot_data.sort_values('Date')
+            
+            # Plot the Skurpy Cut
+            plt.plot(plot_data['Date'], plot_data['Skurpy_Cut'], marker='o', linestyle='-', color='#3498db')
+            
+            # Add labels and title
+            plt.xlabel('Date')
+            plt.ylabel('Skurpy Cut (XTZ)')
+            plt.title('Skurpy Cut (3%) Over Time')
+            plt.grid(True, linestyle='--', alpha=0.7)
+            
+            # Format the y-axis to show XTZ values clearly
+            plt.ticklabel_format(style='plain', axis='y')
+            
+            # Rotate date labels for better readability
+            plt.xticks(rotation=45)
+            
+            # Tight layout to ensure everything fits
+            plt.tight_layout()
+            
+            # Save the plot to a bytes buffer
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            buf.seek(0)
+            
+            # Convert the image to base64 string for embedding in HTML
+            graph_data = base64.b64encode(buf.read()).decode('utf-8')
+            
+            # Close the plot to free memory
+            plt.close()
+        
         # Generate HTML table for preview (optional, limit rows for performance if needed)
         daily_summary_html = None
         has_data = not transactions_df.empty
@@ -345,7 +421,9 @@ def handle_results():
             end_date_iso=end_date_iso,
             metrics=metrics,
             daily_summary_html=daily_summary_html,
-            has_data=has_data
+            has_data=has_data,
+            is_mp_fees=is_mp_fees,
+            graph_data=graph_data
         )
 
     except Exception as e:
@@ -377,7 +455,7 @@ def download_csv(type):
             filename = f"{address}_transactions_{start_date_iso[:10]}_to_{end_date_iso[:10]}.csv"
 
         elif type == 'daily_summary':
-            daily_summary_df = calculate_daily_summary(transactions_df)
+            daily_summary_df = calculate_daily_summary(transactions_df, address)
             if daily_summary_df.empty:
                  return "No daily summary data found to download.", 404
                  
