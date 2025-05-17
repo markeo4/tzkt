@@ -81,8 +81,8 @@
             color: #2c3e50;
         }
         
-        /* Radio button styling */
-        .radio-container {
+        /* Checkbox container styling */
+        .checkbox-container {
             margin-bottom: 20px;
             border: 1px solid #eee;
             border-radius: 8px;
@@ -112,7 +112,7 @@
         .address-option.selected {
             background-color: #e3f2fd;
         }
-        .address-option input[type="radio"] {
+        .address-option input[type="checkbox"] {
             margin-top: 3px;
             margin-right: 10px;
         }
@@ -152,70 +152,79 @@
             <p class="error">Error: {{ error }}</p>
         {% endif %}
         <form action="/results" method="post">
-            <h3>Select Contract Address:</h3>
-            <div class="radio-container">
+            <h3>Select Contract Address(es):</h3>
+            <div class="checkbox-container">
                 <div class="custom-address">
-                    <input type="radio" id="address_custom" name="address_type" value="custom" checked>
+                    <input type="checkbox" id="address_custom" name="address_type" value="custom">
                     <label for="address_custom">Enter custom address:</label>
-                    <input type="text" id="tezos_address" name="tezos_address" value="tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD">
+                    <input type="text" id="tezos_address" name="tezos_address" value="">
                 </div>
-                
+
                 <div class="address-options">
                     <div class="address-option" id="option_bank">
-                        <input type="radio" id="address_bank" name="address_type" value="bank">
+                        <input type="checkbox" id="address_bank" name="address_type" value="bank">
                         <label for="address_bank">
                             <span class="address-name">Bank Address</span>
                             <span class="address-description">Manages money storage and sending for offers, only on Marketplace contract</span>
                             <span class="address-value">KT1NkX98gNeFb3QVcpMs5r7pKUut1twg9DQd</span>
                         </label>
                     </div>
-                    
+
                     <div class="address-option" id="option_factory">
-                        <input type="radio" id="address_factory" name="address_type" value="factory">
+                        <input type="checkbox" id="address_factory" name="address_type" value="factory">
                         <label for="address_factory">
                             <span class="address-name">Contract Factory</span>
                             <span class="address-description">People call and pay this contract to deploy their contracts for them</span>
                             <span class="address-value">KT1S6WCZrJdXFgT1zbVN9MmiPF1C9UMjeFzK</span>
                         </label>
                     </div>
-                    
+
+                    <div class="address-option" id="option_factory_v2">
+                        <input type="checkbox" id="address_factory_v2" name="address_type" value="factory_v2">
+                        <label for="address_factory_v2">
+                            <span class="address-name">Contract Factory V2</span>
+                            <span class="address-description">People call and pay this contract to deploy their contracts for them</span>
+                            <span class="address-value">KT1Qf5nMU9KhS6eRCfrQznD72MuhiHQse5Cd</span>
+                        </label>
+                    </div>
+
                     <div class="address-option" id="option_marketplace">
-                        <input type="radio" id="address_marketplace" name="address_type" value="marketplace">
+                        <input type="checkbox" id="address_marketplace" name="address_type" value="marketplace">
                         <label for="address_marketplace">
                             <span class="address-name">Marketplace</span>
                             <span class="address-description">Listing/auction for 1of1s and offers for both 1of1s and editions</span>
                             <span class="address-value">KT1J8ydKTxBL7ioUqSosrYNsZNq6XcoXkP9C</span>
                         </label>
                     </div>
-                    
+
                     <div class="address-option" id="option_auction">
-                        <input type="radio" id="address_auction" name="address_type" value="auction">
+                        <input type="checkbox" id="address_auction" name="address_type" value="auction">
                         <label for="address_auction">
                             <span class="address-name">Auction Marketplace</span>
                             <span class="address-description">Used for auctioning for both 1of1s and editions</span>
                             <span class="address-value">KT1CT8AjgBhzzUP1CwhW7EvNcsYStipGt5B4</span>
                         </label>
                     </div>
-                    
+
                     <div class="address-option" id="option_editions">
-                        <input type="radio" id="address_editions" name="address_type" value="editions">
+                        <input type="checkbox" id="address_editions" name="address_type" value="editions">
                         <label for="address_editions">
                             <span class="address-name">Editions Marketplace</span>
                             <span class="address-description">Listing of editions</span>
                             <span class="address-value">KT19Mb31GqSumA3YhfdCkv1p1uAaFNR7w7gT</span>
                         </label>
                     </div>
-                    
+
                     <div class="address-option" id="option_mp_owner">
-                        <input type="radio" id="address_mp_owner" name="address_type" value="mp_owner">
+                        <input type="checkbox" id="address_mp_owner" name="address_type" value="mp_owner">
                         <label for="address_mp_owner">
                             <span class="address-name">Marketplace Contract's Owner / MP Fees</span>
                             <span class="address-value">tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD</span>
                         </label>
                     </div>
-                    
+
                     <div class="address-option" id="option_factory_owner">
-                        <input type="radio" id="address_factory_owner" name="address_type" value="factory_owner">
+                        <input type="checkbox" id="address_factory_owner" name="address_type" value="factory_owner">
                         <label for="address_factory_owner">
                             <span class="address-name">Factory owner/agent</span>
                             <span class="address-value">tz1L6kFTx9N9TKGzUMCLJ7ZBgqFs6biRHQEd</span>
@@ -237,84 +246,93 @@
             <button type="submit">Fetch Data</button>
         </div>
     </form>
-    
     <script>
-        // JavaScript to handle radio button selection
+        // JavaScript to handle checkbox selection and custom address input
         document.addEventListener('DOMContentLoaded', function() {
-            // Define the address mapping
+            // Define the address mapping (used for display purposes in JS, actual mapping is in Python)
             const addressMap = {
                 'bank': 'KT1NkX98gNeFb3QVcpMs5r7pKUut1twg9DQd',
                 'factory': 'KT1S6WCZrJdXFgT1zbVN9MmiPF1C9UMjeFzK',
+                'factory_v2': 'KT1Qf5nMU9KhS6eRCfrQznD72MuhiHQse5Cd',
                 'marketplace': 'KT1J8ydKTxBL7ioUqSosrYNsZNq6XcoXkP9C',
                 'auction': 'KT1CT8AjgBhzzUP1CwhW7EvNcsYStipGt5B4',
                 'editions': 'KT19Mb31GqSumA3YhfdCkv1p1uAaFNR7w7gT',
                 'mp_owner': 'tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD',
-                'factory_owner': 'tz1L6kFTx9N9TKGzUMCLJ7ZBgqFs6biRHQEd'
+                'factory_owner': 'tz1L6kFTx9N9TKGzUMCLJ7ZBgqFs6biRHQEd',
+                'contract_factory_v2': 'KT1Qf5nMU9KhS6eRCfrQznD72MuhiHQse5Cd' // Added Contract Factory V2
             };
-            
-            // Get all radio buttons, the text input, and option containers
-            const radioButtons = document.querySelectorAll('input[name="address_type"]');
+
+            // Get all checkboxes, the text input, and option containers
+            const checkboxes = document.querySelectorAll('input[name="address_type"]');
             const addressInput = document.getElementById('tezos_address');
             const addressOptions = document.querySelectorAll('.address-option');
-            
+            const customAddressCheckbox = document.getElementById('address_custom');
+
             // Function to update the selected class on options
-            function updateSelectedClass(selectedValue) {
-                // Remove selected class from all options
+            function updateSelectedClass() {
                 addressOptions.forEach(option => {
-                    option.classList.remove('selected');
-                });
-                
-                // Add selected class to the chosen option
-                if (selectedValue !== 'custom') {
-                    const selectedOption = document.getElementById(`option_${selectedValue}`);
-                    if (selectedOption) {
-                        selectedOption.classList.add('selected');
+                    const checkbox = option.querySelector('input[type="checkbox"]');
+                    if (checkbox && checkbox.checked) {
+                        option.classList.add('selected');
+                    } else {
+                        option.classList.remove('selected');
                     }
+                });
+            }
+
+            // Function to handle checkbox change
+            function handleCheckboxChange() {
+                updateSelectedClass();
+                // Enable/disable custom address input based on its checkbox state
+                addressInput.disabled = !customAddressCheckbox.checked;
+                addressInput.required = customAddressCheckbox.checked;
+                if (customAddressCheckbox.checked) {
+                    addressInput.focus();
                 }
             }
-            
-            // Function to handle radio button change
-            function handleRadioChange(e) {
-                const selectedValue = e.target.value;
-                
-                // Update visual selection
-                updateSelectedClass(selectedValue);
-                
-                if (selectedValue === 'custom') {
-                    // Enable the text input for custom address
-                    addressInput.disabled = false;
-                    addressInput.required = true;
-                    addressInput.focus(); // Focus the input for better UX
-                } else {
-                    // Disable the text input and set its value to the selected predefined address
-                    addressInput.disabled = true;
-                    addressInput.required = false;
-                    addressInput.value = addressMap[selectedValue];
-                }
-            }
-            
-            // Add event listeners to all radio buttons
-            radioButtons.forEach(radio => {
-                radio.addEventListener('change', handleRadioChange);
+
+            // Add event listeners to all checkboxes
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', handleCheckboxChange);
             });
-            
+
             // Add click event to the entire option div for better UX
             addressOptions.forEach(option => {
                 option.addEventListener('click', function(e) {
-                    // Find the radio button inside this option
-                    const radio = this.querySelector('input[type="radio"]');
-                    if (radio && !e.target.matches('input[type="radio"]')) {
-                        radio.checked = true;
-                        radio.dispatchEvent(new Event('change'));
+                    // Find the checkbox inside this option
+                    const checkbox = this.querySelector('input[type="checkbox"]');
+                    if (checkbox && !e.target.matches('input[type="checkbox"]')) {
+                        checkbox.checked = !checkbox.checked; // Toggle checkbox state
+                        checkbox.dispatchEvent(new Event('change'));
                     }
                 });
             });
-            
-            // Initialize the state based on the default selected radio
-            const initialSelected = document.querySelector('input[name="address_type"]:checked');
-            if (initialSelected) {
-                handleRadioChange({ target: initialSelected });
-            }
+
+            // Handle click on the custom address div
+            document.querySelector('.custom-address').addEventListener('click', function(e) {
+                 if (!e.target.matches('input[type="checkbox"]') && !e.target.matches('input[type="text"]')) {
+                    customAddressCheckbox.checked = !customAddressCheckbox.checked;
+                    customAddressCheckbox.dispatchEvent(new Event('change'));
+                 }
+            });
+
+            // Prevent click on label from toggling checkbox twice
+            document.querySelectorAll('.custom-address label, .address-option label').forEach(label => {
+                label.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            });
+
+            // Prevent click on address value from toggling checkbox
+             document.querySelectorAll('.address-value').forEach(valueSpan => {
+                valueSpan.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            });
+
+
+            // Initialize the state based on the default selected checkboxes
+            handleCheckboxChange(); // Call once to set initial state
         });
     </script>
 </body>

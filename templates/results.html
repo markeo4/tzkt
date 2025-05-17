@@ -29,36 +29,66 @@
     </style>
 </head>
 <body>
-    <h1>Results for {{ address }}</h1>
+    <h1>Transaction Results</h1>
     <p>Period: {{ start_date_str }} to {{ end_date_str }}</p>
 
-    <h2>Metrics</h2>
+    <h2>Overall Metrics</h2>
     <div class="metrics">
-        <p><strong>Total Transactions Processed:</strong> {{ metrics.trades }}</p>
-        {% if is_mp_fees %}
-            <p><strong>Total Skurpy Cut (3%):</strong> {{ "%.6f"|format(metrics.earned_xtz) }} XTZ</p>
-            <p><strong>Estimated Total Volume:</strong> {{ "%.6f"|format(metrics.earned_xtz / 0.03) }} XTZ</p>
-        {% else %}
-            <p><strong>Total Volume (Sent + Received):</strong> {{ "%.6f"|format(metrics.volume_xtz) }} XTZ</p>
-            <p><strong>Total Tezos Earned (Incoming):</strong> {{ "%.6f"|format(metrics.earned_xtz) }} XTZ</p>
-        {% endif %}
+        <p><strong>Total Transactions Processed (All Addresses):</strong> {{ overall_metrics.trades }}</p>
+        <p><strong>Total Volume (Sent + Received, All Addresses):</strong> {{ "%.6f"|format(overall_metrics.volume_xtz) }} XTZ</p>
+        <p><strong>Total Tezos Earned (Incoming, All Addresses):</strong> {{ "%.6f"|format(overall_metrics.earned_xtz) }} XTZ</p>
     </div>
+
+    {% if addresses|length > 1 %}
+    <h2>Metrics per Address</h2>
+    <div class="metrics">
+        {# Define the address map for translation #}
+        {% set address_map = {
+            'KT1NkX98gNeFb3QVcpMs5r7pKUut1twg9DQd': 'bank',
+            'KT1S6WCZrJdXFgT1zbVN9MmiPF1C9UMjeFzK': 'factory',
+            'KT1Qf5nMU9KhS6eRCfrQznD72MuhiHQse5Cd': 'factory_v2/contract_factory_v2',
+            'KT1J8ydKTxBL7ioUqSosrYNsZNq6XcoXkP9C': 'marketplace',
+            'KT1CT8AjgBhzzUP1CwhW7EvNcsYStipGt5B4': 'auction',
+            'KT19Mb31GqSumA3YhfdCkv1p1uAaFNR7w7gT': 'editions',
+            'tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD': 'mp_owner',
+            'tz1L6kFTx9N9TKGzUMCLJ7ZBgqFs6biRHQEd': 'factory_owner'
+        } %}
+
+        {% for address, metric_data in metrics.items() %}
+            <h3>
+                {% if address in address_map %}
+                    {{ address_map[address] }} ({{ address }})
+                {% else %}
+                    {{ address }}
+                {% endif %}
+            </h3>
+            <p><strong>Transactions Processed:</strong> {{ metric_data.trades }}</p>
+            {% if address == 'tz1cY5tTfFb5c4Q9VyJ895y6eLk1ohXXqwVD' %} {# Check if this is the MP Fees address #}
+                <p><strong>Total Skurpy Cut (3%):</strong> {{ "%.6f"|format(metric_data.earned_xtz) }} XTZ</p>
+                <p><strong>Estimated Total Volume:</strong> {{ "%.6f"|format(metric_data.earned_xtz / 0.03) }} XTZ</p>
+            {% else %}
+                <p><strong>Total Volume (Sent + Received):</strong> {{ "%.6f"|format(metric_data.volume_xtz) }} XTZ</p>
+                <p><strong>Total Tezos Earned (Incoming):</strong> {{ "%.6f"|format(metric_data.earned_xtz) }} XTZ</p>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
 
     {% if has_data %}
     <h2>Downloads</h2>
     <div class="download-links">
-        <a href="{{ url_for('download_csv', type='transactions', address=address, start=start_date_iso, end=end_date_iso) }}">
+        <a href="{{ url_for('download_csv', type='transactions', addresses=addresses|join(','), start=start_date_iso, end=end_date_iso) }}">
             Download All Transactions (CSV)
         </a>
-        <a href="{{ url_for('download_csv', type='daily_summary', address=address, start=start_date_iso, end=end_date_iso) }}">
+        <a href="{{ url_for('download_csv', type='daily_summary', addresses=addresses|join(','), start=start_date_iso, end=end_date_iso) }}">
             Download Daily Summary (CSV)
         </a>
     </div>
 
-    {% if is_mp_fees and graph_data %}
-    <h2>Skurpy Cut Over Time</h2>
+    {% if graph_data %} {# Removed is_mp_fees condition #}
+    <h2>{{ 'Skurpy Cut Over Time' if is_mp_fees else 'XTZ Received Over Time' }}</h2> {# Dynamic title #}
     <div class="graph-container" style="margin: 20px 0; text-align: center;">
-        <img src="data:image/png;base64,{{ graph_data }}" alt="Skurpy Cut Over Time" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+        <img src="data:image/png;base64,{{ graph_data }}" alt="{{ 'Skurpy Cut Over Time' if is_mp_fees else 'XTZ Received Over Time by Address' }}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);"> {# Dynamic alt text #}
     </div>
     {% endif %}
 
